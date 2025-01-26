@@ -1,0 +1,11 @@
+[package]
+name = "js-compiler"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = []
+x64 = []
+
+[dependencies]
+chrono = "0.4"
