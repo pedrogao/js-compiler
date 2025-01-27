@@ -190,6 +190,7 @@ pub fn lower_ast(ast: AST) -> IRModule {
     module
 }
 
+// Also fix the Statement::Let handling to ensure proper variable initialization
 fn lower_statement(builder: &mut IRBuilder, stmt: Statement) {
     match stmt {
         Statement::Return(Some(expr)) => {
@@ -201,7 +202,7 @@ fn lower_statement(builder: &mut IRBuilder, stmt: Statement) {
         }
         Statement::Let { name, initializer } => {
             lower_expression(builder, initializer);
-            let local_idx = builder.get_or_create_local(&name);
+            builder.get_or_create_local(&name); // Ensure local exists
             builder.emit(IRInstruction::Store(name));
         }
         Statement::ExpressionStatement(expr) => {
@@ -218,6 +219,7 @@ fn lower_statement(builder: &mut IRBuilder, stmt: Statement) {
 
             // Compile condition
             lower_expression(builder, condition);
+            builder.emit(IRInstruction::Unary(UnaryOp::Not)); // Add this line to negate the condition
             builder.emit(IRInstruction::JumpIf(else_label.clone()));
 
             // Compile then branch
@@ -280,12 +282,17 @@ fn lower_expression(builder: &mut IRBuilder, expr: Expression) {
             builder.emit(IRInstruction::Load(name));
         }
         Expression::FunctionCall { name, arguments } => {
-            // Push arguments in forward order (will be consumed from right-to-left)
-            let arg_count = arguments.len() as u16;
+            // First evaluate all arguments
+            let arg_size = arguments.len();
             for arg in arguments {
-                lower_expression(builder, arg);
+                match arg {
+                    Expression::Identifier(ref var_name) => {
+                        builder.emit(IRInstruction::Load(var_name.clone()));
+                    }
+                    _ => lower_expression(builder, arg),
+                }
             }
-            builder.emit(IRInstruction::Call(name, arg_count));
+            builder.emit(IRInstruction::Call(name, arg_size as u16));
         }
         Expression::BinaryOp { op, left, right } => {
             lower_expression(builder, *left);

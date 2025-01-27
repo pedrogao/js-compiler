@@ -87,11 +87,13 @@ impl VMContext {
     }
 
     fn get_local(&self, name: &str) -> Value {
+        // First check current frame's locals
         if let Some(frame) = self.frames.last() {
             if let Some(value) = frame.locals.get(name) {
                 return value.clone();
             }
         }
+        // Then check globals
         self.globals.get(name).cloned().unwrap_or(Value::Undefined)
     }
 
@@ -126,6 +128,7 @@ impl VM {
             Some(Function::IR(function)) => {
                 let stack_base = self.context.stack.len();
                 let mut frame = CallFrame::new(function, stack_base);
+                let mut return_value = Value::Undefined;
 
                 // Set up parameters as locals
                 for (param, arg) in frame.function.params.iter().zip(args) {
@@ -135,26 +138,37 @@ impl VM {
                 self.context.frames.push(frame);
 
                 // Execute until frame returns
-                while let Some(frame) = self.context.frames.last_mut() {
-                    if frame.ip >= frame.function.instructions.len() {
-                        // Implicit return undefined
-                        let frame = self.context.frames.pop().unwrap();
-                        self.context.stack.truncate(frame.stack_base);
-                        self.context.push(Value::Undefined);
+                loop {
+                    let current_frame = self.context.frames.last_mut().unwrap();
+                    if current_frame.ip >= current_frame.function.instructions.len() {
+                        let stack_base = current_frame.stack_base;
+                        // Get any value left on the stack as implicit return
+                        if self.context.stack.len() > stack_base {
+                            return_value = self.context.pop();
+                        }
+                        self.context.frames.pop();
+                        self.context.stack.truncate(stack_base);
                         break;
                     }
 
-                    let instruction = frame.function.instructions[frame.ip].clone();
-                    frame.ip += 1;
+                    let instruction = current_frame.function.instructions[current_frame.ip].clone();
+                    current_frame.ip += 1;
+
+                    // Handle explicit returns
+                    if let IRInstruction::Return(has_value) = &instruction {
+                        let stack_base = current_frame.stack_base;
+                        if *has_value {
+                            return_value = self.context.pop();
+                        }
+                        self.context.frames.pop();
+                        self.context.stack.truncate(stack_base);
+                        break;
+                    }
+
                     self.execute_instruction(instruction);
                 }
 
-                // Get return value from top of stack
-                if self.context.stack.len() > stack_base {
-                    self.context.pop()
-                } else {
-                    Value::Undefined
-                }
+                return_value
             }
             Some(Function::Native(func)) => func(args),
             None => panic!("Function {} not found", name),
