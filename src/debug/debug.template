@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>IR Debug Visualizer</title>
+    <style>
+        .container { display: flex; }
+        .panel { margin: 10px; padding: 10px; border: 1px solid #ccc; }
+        .stack-item, .local-var { margin: 5px; padding: 5px; border: 1px solid #eee; }
+        .current { background-color: #e6ffe6; }
+        .controls { margin: 10px; }
+        button { margin: 0 5px; }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <button onclick="stepBack()">⬅️ Step Back</button>
+        <button onclick="stepForward()">Step Forward ➡️</button>
+        <button onclick="togglePlay()">▶️ Play/Pause</button>
+        <input type="range" id="speed" min="1" max="100" value="50">
+        <span id="frameCounter">Frame: 0/0</span>
+    </div>
+    <div class="container">
+        <div class="panel">
+            <h3>Instructions</h3>
+            <pre id="instructions"></pre>
+        </div>
+        <div class="panel">
+            <h3>Stack</h3>
+            <div id="stack"></div>
+        </div>
+        <div class="panel">
+            <h3>Locals</h3>
+            <div id="locals"></div>
+        </div>
+    </div>
+    <script>
+        const traceData = {{TRACE_DATA}};
+        let currentFrame = 0;
+        let isPlaying = false;
+        let playInterval;
+
+        function updateVisualization() {
+            const frame = traceData.frames[currentFrame];
+            document.getElementById('frameCounter').textContent = 
+                `Frame: ${currentFrame + 1}/${traceData.frames.length}`;
+
+            // Update instructions
+            const instrElem = document.getElementById('instructions');
+            instrElem.innerHTML = `${frame.function_name}:${frame.ip}\n${frame.instruction}`;
+
+            // Update stack
+            const stackElem = document.getElementById('stack');
+            stackElem.innerHTML = frame.stack.map((item, i) => 
+                `<div class="stack-item">${i}: ${item}</div>`
+            ).reverse().join('');
+
+            // Update locals
+            const localsElem = document.getElementById('locals');
+            localsElem.innerHTML = Object.entries(frame.locals).map(([key, value]) =>
+                `<div class="local-var">${key}: ${value}</div>`
+            ).join('');
+        }
+
+        function stepForward() {
+            if (currentFrame < traceData.frames.length - 1) {
+                currentFrame++;
+                updateVisualization();
+            }
+        }
+
+        function stepBack() {
+            if (currentFrame > 0) {
+                currentFrame--;
+                updateVisualization();
+            }
+        }
+
+        function togglePlay() {
+            isPlaying = !isPlaying;
+            if (isPlaying) {
+                playInterval = setInterval(() => {
+                    if (currentFrame < traceData.frames.length - 1) {
+                        stepForward();
+                    } else {
+                        togglePlay();
+                    }
+                }, 1000 / document.getElementById('speed').value);
+            } else {
+                clearInterval(playInterval);
+            }
+        }
+
+        // Keyboard controls
+        document.addEventListener('keydown', (e) => {
+            switch(e.key) {
+                case 'ArrowRight': stepForward(); break;
+                case 'ArrowLeft': stepBack(); break;
+                case ' ': togglePlay(); break;
+            }
+        });
+
+        // Initialize
+        updateVisualization();
+    </script>
+</body>
+</html>

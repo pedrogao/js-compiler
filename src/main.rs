@@ -4,6 +4,7 @@ mod lexer;
 mod optimizer;
 mod parser;
 mod vm;
+mod debug;
 
 use std::fs;
 use std::path::Path;
@@ -70,10 +71,19 @@ fn main() {
         fs::write(&output_path, assembly).expect("Failed to write assembly output");
         println!("Assembly written to: {}", output_path.display());
     } else {
-        println!("\nExecuting in VM...");
+        println!("\nExecuting in VM with debugging...");
         let mut vm = vm::VM::new(ir);
-        let result = vm::Value::Number(0.0);
-        match vm.execute_function("main", vec![]) {
+        vm.enable_debugging();
+        let result = vm.execute_function("main", vec![]);
+
+        // Generate debug visualization
+        if let Some(debug_trace) = vm.get_debug_trace() {
+            let html = debug_trace.generate_html();
+            fs::write("debug_output.html", html).expect("Failed to write debug output");
+            println!("Debug visualization written to debug_output.html");
+        }
+
+        match result {
             vm::Value::Number(n) => println!("Result: {}", n),
             vm::Value::String(s) => println!("Result: \"{}\"", s),
             vm::Value::Undefined => println!("Result: undefined"),

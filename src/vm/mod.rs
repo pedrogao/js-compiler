@@ -1,3 +1,4 @@
+use crate::debug::DebugTrace;
 use crate::ir::{BinaryOp, Constant, IRFunction, IRInstruction, IRModule, UnaryOp};
 use std::collections::HashMap;
 
@@ -105,13 +106,19 @@ impl VMContext {
 
 pub struct VM {
     context: VMContext,
+    debug_trace: Option<DebugTrace>,
 }
 
 impl VM {
     pub fn new(module: IRModule) -> Self {
         VM {
             context: VMContext::new(&module),
+            debug_trace: None,
         }
+    }
+
+    pub fn enable_debugging(&mut self) {
+        self.debug_trace = Some(DebugTrace::new());
     }
 
     pub fn execute_function(&mut self, name: &str, args: Vec<Value>) -> Value {
@@ -155,6 +162,19 @@ impl VM {
     }
 
     fn execute_instruction(&mut self, instruction: IRInstruction) {
+        // Record debug info before execution
+        if let Some(debug_trace) = &mut self.debug_trace {
+            if let Some(frame) = self.context.frames.last() {
+                debug_trace.add_frame(
+                    &instruction,
+                    &self.context.stack,
+                    &frame.locals,
+                    frame.ip - 1,
+                    &frame.function.name,
+                );
+            }
+        }
+
         match instruction {
             IRInstruction::Pop => {
                 self.context.pop();
@@ -244,6 +264,10 @@ impl VM {
                 }
             }
         }
+    }
+
+    pub fn get_debug_trace(&self) -> Option<&DebugTrace> {
+        self.debug_trace.as_ref()
     }
 
     // Helper methods for binary operations
