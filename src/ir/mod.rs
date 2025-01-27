@@ -280,12 +280,12 @@ fn lower_expression(builder: &mut IRBuilder, expr: Expression) {
             builder.emit(IRInstruction::Load(name));
         }
         Expression::FunctionCall { name, arguments } => {
-            // Push arguments in reverse order
-            let count = arguments.len();
-            for arg in arguments.into_iter().rev() {
+            // Push arguments in forward order (will be consumed from right-to-left)
+            let arg_count = arguments.len() as u16;
+            for arg in arguments {
                 lower_expression(builder, arg);
             }
-            builder.emit(IRInstruction::Call(name, count as u16));
+            builder.emit(IRInstruction::Call(name, arg_count));
         }
         Expression::BinaryOp { op, left, right } => {
             lower_expression(builder, *left);

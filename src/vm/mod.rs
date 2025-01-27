@@ -206,11 +206,8 @@ impl VM {
                 self.context.push(result);
             }
             IRInstruction::Call(name, argc) => {
-                let mut args = Vec::new();
-                for _ in 0..argc {
-                    args.push(self.context.pop());
-                }
-                args.reverse();
+                let stack_base = self.context.stack.len() - argc as usize;
+                let args: Vec<Value> = self.context.stack.drain(stack_base..).collect();
                 let result = self.execute_function(&name, args);
                 self.context.push(result);
             }

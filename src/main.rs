@@ -50,7 +50,7 @@ fn main() {
 
     println!("\nGenerating IR...");
     let ir = ir::lower_ast(ast);
-    println!("Generated IR functions {:?}", ir.functions);
+    println!("Generated IR {:?}", ir);
     // println!("Generated {} IR functions", ir.functions.len());
 
     // println!("\nOptimizing...");
