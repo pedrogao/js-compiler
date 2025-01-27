@@ -2,7 +2,7 @@ use crate::debug::DebugTrace;
 use crate::ir::{BinaryOp, Constant, IRFunction, IRInstruction, IRModule, UnaryOp};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Null,
     Number(f64),
@@ -99,8 +99,15 @@ impl VMContext {
 
     fn set_local(&mut self, name: String, value: Value) {
         if let Some(frame) = self.frames.last_mut() {
-            frame.locals.insert(name, value);
+            // First try to update existing local
+            if frame.locals.contains_key(&name) {
+                frame.locals.insert(name, value);
+            } else {
+                // If not found in current frame, set as global
+                self.globals.insert(name, value);
+            }
         } else {
+            // No active frame, set as global
             self.globals.insert(name, value);
         }
     }
@@ -366,17 +373,26 @@ impl VM {
     }
 
     fn binary_and(&self, left: Value, right: Value) -> Value {
-        match (Self::to_boolean(&left), Self::to_boolean(&right)) {
-            (true, true) => right,
-            _ => Value::Boolean(false),
+        // First evaluate left operand
+        let left_bool = Self::to_boolean(&left);
+        if !left_bool {
+            // Short-circuit: if left is false, return false
+            Value::Boolean(false)
+        } else {
+            // Left is true, evaluate and return right operand as boolean
+            Value::Boolean(Self::to_boolean(&right))
         }
     }
 
     fn binary_or(&self, left: Value, right: Value) -> Value {
-        if Self::to_boolean(&left) {
-            left
+        // First evaluate left operand
+        let left_bool = Self::to_boolean(&left);
+        if left_bool {
+            // Short-circuit: if left is true, return true
+            Value::Boolean(true)
         } else {
-            right
+            // Left is false, evaluate and return right operand as boolean
+            Value::Boolean(Self::to_boolean(&right))
         }
     }
 
@@ -451,4 +467,90 @@ fn native_print(args: Vec<Value>) -> Value {
     }
     println!();
     Value::Undefined
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::lexer::tokenize;
+    use crate::parser::parse;
+
+    fn setup_vm(source: &str) -> VM {
+        let tokens = tokenize(source);
+        let ast = parse(tokens);
+        let ir_module = crate::ir::lower_ast(ast);
+        VM::new(ir_module)
+    }
+
+    #[test]
+    fn test_arithmetic_operations() {
+        let mut vm = setup_vm("function test() { return 5 + 3; }");
+        let result = vm.execute_function("test", vec![]);
+        match result {
+            Value::Number(n) => assert_eq!(n, 8.0),
+            _ => panic!("Expected number result"),
+        }
+    }
+
+    #[test]
+    fn test_comparison_operations() {
+        let mut vm = setup_vm("function test(x, y) { return x > y; }");
+        let result = vm.execute_function("test", vec![Value::Number(5.0), Value::Number(3.0)]);
+        assert_eq!(result, Value::Boolean(true));
+    }
+
+    #[test]
+    fn test_function_calls() {
+        let mut vm = setup_vm(
+            "function add(x, y) { return x + y; }
+             function test() { return add(5, 3); }",
+        );
+        let result = vm.execute_function("test", vec![]);
+        match result {
+            Value::Number(n) => assert_eq!(n, 8.0),
+            _ => panic!("Expected number result"),
+        }
+    }
+
+    #[test]
+    fn test_conditional_execution() {
+        let mut vm = setup_vm(
+            "function test(x) { 
+                if (x > 0) { 
+                    return true; 
+                } else { 
+                    return false; 
+                }
+             }",
+        );
+
+        let result_positive = vm.execute_function("test", vec![Value::Number(1.0)]);
+        assert_eq!(result_positive, Value::Boolean(true));
+
+        let result_negative = vm.execute_function("test", vec![Value::Number(-1.0)]);
+        assert_eq!(result_negative, Value::Boolean(false));
+    }
+
+    #[test]
+    fn test_variable_scoping() {
+        let mut vm = setup_vm(
+            "let global = 10;
+             function test() { 
+                let local = 20;
+                let result = local + global;
+                return result;
+             }",
+        );
+
+        // First set the global variable
+        vm.context
+            .globals
+            .insert("global".to_string(), Value::Number(10.0));
+
+        let result = vm.execute_function("test", vec![]);
+        match result {
+            Value::Number(n) => assert_eq!(n, 30.0),
+            _ => panic!("Expected number result"),
+        }
+    }
 }

@@ -357,3 +357,66 @@ pub fn tokenize(source: &str) -> Vec<Token> {
 
     tokens
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_simple_tokens() {
+        let input = "let x = 5;";
+        let tokens = tokenize(input);
+
+        assert_eq!(tokens[0].token_type, TokenType::Let);
+        assert_eq!(tokens[1].token_type, TokenType::Identifier("x".to_string()));
+        assert_eq!(tokens[2].token_type, TokenType::Equal);
+        assert_eq!(tokens[3].token_type, TokenType::Number(5.0));
+        assert_eq!(tokens[4].token_type, TokenType::Semicolon);
+    }
+
+    #[test]
+    fn test_operators() {
+        let input = "+ - * / = == != < > <= >=";
+        let tokens = tokenize(input);
+
+        let expected = vec![
+            TokenType::Plus,
+            TokenType::Minus,
+            TokenType::Multiply,
+            TokenType::Divide,
+            TokenType::Equal,
+            TokenType::EqualEqual,
+            TokenType::NotEqual,
+            TokenType::LessThan,
+            TokenType::GreaterThan,
+            TokenType::LessEqual,
+            TokenType::GreaterEqual,
+        ];
+
+        for (i, expected_type) in expected.into_iter().enumerate() {
+            assert_eq!(tokens[i].token_type, expected_type);
+        }
+    }
+
+    #[test]
+    fn test_keywords() {
+        let input = "function let return if else while true false null";
+        let tokens = tokenize(input);
+
+        let expected = vec![
+            TokenType::Function,
+            TokenType::Let,
+            TokenType::Return,
+            TokenType::If,
+            TokenType::Else,
+            TokenType::While,
+            TokenType::True,
+            TokenType::False,
+            TokenType::Null,
+        ];
+
+        for (i, expected_type) in expected.into_iter().enumerate() {
+            assert_eq!(tokens[i].token_type, expected_type);
+        }
+    }
+}

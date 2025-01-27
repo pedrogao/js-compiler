@@ -365,3 +365,59 @@ fn lower_expression(builder: &mut IRBuilder, expr: Expression) {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::lexer::tokenize;
+    use crate::parser::parse;
+
+    #[test]
+    fn test_simple_function() {
+        let input = "function add(x, y) { return x + y; }";
+        let tokens = tokenize(input);
+        let ast = parse(tokens);
+        let ir_module = lower_ast(ast);
+        
+        assert_eq!(ir_module.functions.len(), 1);
+        let function = &ir_module.functions[0];
+        assert_eq!(function.name, "add");
+        assert_eq!(function.params.len(), 2);
+        assert!(function.params.contains(&"x".to_string()));
+        assert!(function.params.contains(&"y".to_string()));
+    }
+
+    #[test]
+    fn test_binary_operation() {
+        let input = "function calc() { return 5 + 3; }";
+        let tokens = tokenize(input);
+        let ast = parse(tokens);
+        let ir_module = lower_ast(ast);
+        
+        let function = &ir_module.functions[0];
+        let instructions = &function.instructions;
+        
+        // Check for constant pushing and binary operation
+        assert!(matches!(instructions[0], IRInstruction::PushConst(Constant::Number(5.0))));
+        assert!(matches!(instructions[1], IRInstruction::PushConst(Constant::Number(3.0))));
+        assert!(matches!(instructions[2], IRInstruction::Binary(BinaryOp::Add)));
+        assert!(matches!(instructions[3], IRInstruction::Return(true)));
+    }
+
+    #[test]
+    fn test_if_statement_ir() {
+        let input = "function test(x) { if (x > 0) { return true; } return false; }";
+        let tokens = tokenize(input);
+        let ast = parse(tokens);
+        let ir_module = lower_ast(ast);
+        
+        let function = &ir_module.functions[0];
+        
+        // Verify that we have conditional jump instructions
+        let has_jumps = function.instructions.iter().any(|inst| {
+            matches!(inst, IRInstruction::JumpIf(_))
+        });
+        
+        assert!(has_jumps, "If statement should generate jump instructions");
+    }
+}

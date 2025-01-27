@@ -497,3 +497,80 @@ pub fn parse(tokens: Vec<Token>) -> AST {
 
     AST { statements }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::lexer::tokenize;
+
+    #[test]
+    fn test_let_statement() {
+        let input = "let x = 5;";
+        let tokens = tokenize(input);
+        let mut parser = Parser::new(tokens);
+
+        let statements = vec![parser.parse_statement()];
+
+        match &statements[0] {
+            Statement::Let { name, initializer } => {
+                assert_eq!(name, "x");
+                match initializer {
+                    Expression::Number(val) => assert_eq!(*val, 5.0),
+                    _ => panic!("Expected number expression"),
+                }
+            }
+            _ => panic!("Expected let statement"),
+        }
+    }
+
+    #[test]
+    fn test_return_statement() {
+        let input = "return 10;";
+        let tokens = tokenize(input);
+        let mut parser = Parser::new(tokens);
+
+        let statements = vec![parser.parse_statement()];
+
+        match &statements[0] {
+            Statement::Return(Some(expr)) => match expr {
+                Expression::Number(val) => assert_eq!(*val, 10.0),
+                _ => panic!("Expected number expression"),
+            },
+            _ => panic!("Expected return statement"),
+        }
+    }
+
+    #[test]
+    fn test_if_statement() {
+        let input = "if (x > 5) { return true; }";
+        let tokens = tokenize(input);
+        let mut parser = Parser::new(tokens);
+
+        let statements = vec![parser.parse_statement()];
+
+        match &statements[0] {
+            Statement::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                assert!(else_branch.is_none());
+                match condition {
+                    Expression::BinaryOp { op, left, right } => {
+                        assert_eq!(op, ">");
+                        match &**left {
+                            Expression::Identifier(name) => assert_eq!(name, "x"),
+                            _ => panic!("Expected identifier"),
+                        }
+                        match &**right {
+                            Expression::Number(val) => assert_eq!(*val, 5.0),
+                            _ => panic!("Expected number"),
+                        }
+                    }
+                    _ => panic!("Expected binary operation"),
+                }
+            }
+            _ => panic!("Expected if statement"),
+        }
+    }
+}
