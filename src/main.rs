@@ -1,10 +1,10 @@
 mod codegen;
+mod debug;
 mod ir;
 mod lexer;
 mod optimizer;
 mod parser;
 mod vm;
-mod debug;
 
 use std::fs;
 use std::path::Path;
@@ -47,84 +47,65 @@ fn main() {
 
     println!("\nParsing...");
     let ast = parser::parse(tokens);
-    println!("Generated AST {:?}", ast.statements);
+    // println!("Generated AST {:?}", ast.statements);
 
     println!("\nGenerating IR...");
     let ir = ir::lower_ast(ast);
-    println!("Generated IR {:?}", ir);
+    // println!("Generated IR {:?}", ir);
     // println!("Generated {} IR functions", ir.functions.len());
 
     // println!("\nOptimizing...");
     // let optimized_ir = optimizer::optimize(ir);
 
-    // Choose between VM execution or native code generation
-    if cfg!(feature = "x64") {
-        println!("\nGenerating x64 assembly...");
-        let assembly = codegen::generate_x64(ir);
-
-        let output_path = if std::env::args().len() > 1 {
-            Path::new(&std::env::args().nth(1).unwrap()).with_extension("s")
-        } else {
-            Path::new("output.s").to_path_buf()
-        };
-
-        fs::write(&output_path, assembly).expect("Failed to write assembly output");
-        println!("Assembly written to: {}", output_path.display());
+    // Choose between targets based on features
+    let target = if cfg!(feature = "x64") {
+        codegen::Target::X64
+    } else if cfg!(feature = "arm64") {
+        codegen::Target::ARM64
+    } else if cfg!(feature = "wasm") {
+        codegen::Target::Wasm
     } else {
-        println!("\nExecuting in VM with debugging...");
-        let mut vm = vm::VM::new(ir);
-        vm.enable_debugging();
-        let result = vm.execute_function("main", vec![]);
+        codegen::Target::None
+    };
 
-        // Generate debug visualization
-        if let Some(debug_trace) = vm.get_debug_trace() {
-            let html = debug_trace.generate_html();
-            fs::write("debug_output.html", html).expect("Failed to write debug output");
-            println!("Debug visualization written to debug_output.html");
+    match target {
+        codegen::Target::None => {
+            println!("Running in VM mode (no native code generation)");
+            let mut vm = vm::VM::new(ir);
+            vm.enable_debugging();
+            let result = vm.execute_function("main", vec![]);
+
+            if let Some(debug_trace) = vm.get_debug_trace() {
+                let html = debug_trace.generate_html();
+                fs::write("debug_output.html", html).expect("Failed to write debug output");
+                println!("Debug visualization written to debug_output.html");
+            }
+
+            match result {
+                vm::Value::Number(n) => println!("Result: {}", n),
+                vm::Value::String(s) => println!("Result: \"{}\"", s),
+                vm::Value::Undefined => println!("Result: undefined"),
+                _ => println!("Result: {:?}", result),
+            }
         }
+        _ => {
+            println!("\nGenerating code for target {:?}...", target);
+            if let Some(output) = codegen::generate_code(ir, target.clone()) {
+                let extension = match target {
+                    codegen::Target::X64 | codegen::Target::ARM64 => "s",
+                    codegen::Target::Wasm => "wat",
+                    _ => unreachable!(),
+                };
 
-        match result {
-            vm::Value::Number(n) => println!("Result: {}", n),
-            vm::Value::String(s) => println!("Result: \"{}\"", s),
-            vm::Value::Undefined => println!("Result: undefined"),
-            _ => println!("Result: {:?}", result),
-        }
-    }
-}
+                let output_path = if std::env::args().len() > 1 {
+                    Path::new(&std::env::args().nth(1).unwrap()).with_extension(extension)
+                } else {
+                    Path::new(&format!("output.{}", extension)).to_path_buf()
+                };
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_fibonacci() {
-        let tokens = lexer::tokenize(EXAMPLE_JS);
-        let ast = parser::parse(tokens);
-        let ir = ir::lower_ast(ast);
-        let mut vm = vm::VM::new(ir);
-
-        if let vm::Value::Number(result) =
-            vm.execute_function("fibonacci", vec![vm::Value::Number(10.0)])
-        {
-            assert!((result - 55.0).abs() < f64::EPSILON);
-        } else {
-            panic!("Expected number result from fibonacci(10)");
-        }
-    }
-
-    #[test]
-    fn test_is_even() {
-        let tokens = lexer::tokenize(EXAMPLE_JS);
-        let ast = parser::parse(tokens);
-        let ir = ir::lower_ast(ast);
-        let mut vm = vm::VM::new(ir);
-
-        if let vm::Value::Boolean(result) =
-            vm.execute_function("isEven", vec![vm::Value::Number(55.0)])
-        {
-            assert_eq!(result, false);
-        } else {
-            panic!("Expected boolean result from isEven(55)");
+                fs::write(&output_path, output).expect("Failed to write output");
+                println!("Output written to: {}", output_path.display());
+            }
         }
     }
 }

@@ -1,3 +1,4 @@
 /target
-*.s
+output.s
+output.wat
 debug_output.html
